@@ -7,14 +7,15 @@ using System.IO;
 
 namespace SimpleBus
 {
+
     public class Notifier : INotifier
     {
         private readonly string _baseDir, _from;
+        private readonly System.Text.RegularExpressions.Regex _matcher;
         private readonly FileSystemWatcher _watcher;
-        private Dictionary<string, bool> _matchPatterns = new Dictionary<string, bool>();
-        private Dictionary<string, Func<string, string>> _callbacks = new Dictionary<string, Func<string, string>>();
-        private Dictionary<string, ITopicGenerator> _topicGens = new Dictionary<string, ITopicGenerator>();
-        public Notifier(string from, string baseDir)
+        private Dictionary<string, Action<AckInfo>> _callbacks = new Dictionary<string, Action<AckInfo>>();
+        private readonly ITopicGenerator _topicGen;
+        public Notifier(string from, string baseDir, ITopicGenerator topicGenerator = null)
         {
             _baseDir = baseDir;
             _from = from;
@@ -22,16 +23,40 @@ namespace SimpleBus
             _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.CreationTime;
             _watcher.Created += _watcher_Created;
             _watcher.Changed += _watcher_Changed;
+            _topicGen = topicGenerator ?? new FromTopicGenerator(from);
+            _matcher = new System.Text.RegularExpressions.Regex(_topicGen.GenerateAckTopicPattern().Replace("*", @".*"), System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         }
 
+        // search ack is back
         private void _watcher_Changed(object sender, FileSystemEventArgs e)
         {
-            throw new NotImplementedException();
+            Callback(e);
         }
 
         private void _watcher_Created(object sender, FileSystemEventArgs e)
         {
+            Callback(e);
+        }
 
+        private void Callback(FileSystemEventArgs e)
+        {
+            var filename = e.Name;
+            if (_matcher.IsMatch(filename))
+            {
+                var parsed = _topicGen.Parse(filename);
+                var from = parsed["from"];
+                if (_callbacks.ContainsKey(from))
+                {
+                    var msg = File.ReadAllText(e.FullPath);
+                    _callbacks[from](new AckInfo
+                    {
+                        From = from,
+                        To = parsed["to"],
+                        AckAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddhhmmssfff", null),
+                        Message = msg
+                    });
+                }
+            }
         }
 
         public void Dispose()
@@ -40,15 +65,12 @@ namespace SimpleBus
             _watcher.Dispose();
         }
 
-        public void Notify(string target, Func<string, string> callbackFunc = null, string body = null)
+        public void Notify(string target, Action<AckInfo> callback = null, string body = null)
         {
-            var gen = new FromToTopicGenerator(_from, target);
-            var topic = gen.Generate();
-            var ackPattern = gen.GenerateAckTopicPattern();
+            var topic = _topicGen.Generate(target);
+            var ackPattern = _topicGen.GenerateAckTopicPattern();
 
-            _matchPatterns[ackPattern] = true;
-            _topicGens[target] = gen;
-            if (callbackFunc != null) _callbacks[target] = callbackFunc;
+            if (callback != null) _callbacks[target] = callback;
 
             if(!Directory.Exists(_baseDir))
             {

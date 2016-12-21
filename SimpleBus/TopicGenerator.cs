@@ -8,29 +8,27 @@ namespace SimpleBus
 {
     public interface ITopicGenerator
     {
-        string Generate();
+        string Generate(string to, DateTime? timestamp = null);
         string GenerateAckTopicPattern();
         Dictionary<string, string> Parse(string input);
     }
 
-    public class FromToTopicGenerator : ITopicGenerator
+    public class FromTopicGenerator : ITopicGenerator
     {
-        private readonly string _from, _to;
-        private readonly DateTime? _time;
-        public FromToTopicGenerator(string from, string to, DateTime? timestamp=null)
+        private readonly string _from;
+        public FromTopicGenerator(string from)
         {
             _from = from;
-            _to = to;
-            _time = timestamp;
         }
-        public string Generate()
+
+        public string Generate(string to, DateTime? timestamp = default(DateTime?))
         {
-            return string.Join(".", new[] { _from, _to, (_time ?? DateTime.Now).ToString("yyyyMMddhhmmssfff"), "sbm" });
+            return string.Join(".", new[] { _from, to, (timestamp ?? DateTime.Now).ToString("yyyyMMddhhmmssfff"), "sbm" });
         }
 
         public string GenerateAckTopicPattern()
         {
-            return string.Join(".", new[] { _to, _from, "*", "sbm" });
+            return string.Join(".", new[] { "*" , _from, "*", "sbm" });
         }
 
         public Dictionary<string, string> Parse(string input)
