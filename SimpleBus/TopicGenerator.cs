@@ -9,7 +9,7 @@ namespace SimpleBus
     public interface ITopicGenerator
     {
         string Generate(string to, DateTime? timestamp = null);
-        string GenerateAckTopicPattern();
+        string GenerateReceiveTopicPattern();
         Dictionary<string, string> Parse(string input);
     }
 
@@ -26,7 +26,7 @@ namespace SimpleBus
             return string.Join(".", new[] { _from, to, (timestamp ?? DateTime.Now).ToString("yyyyMMddhhmmssfff"), "sbm" });
         }
 
-        public string GenerateAckTopicPattern()
+        public string GenerateReceiveTopicPattern()
         {
             return string.Join(".", new[] { "*" , _from, "*", "sbm" });
         }

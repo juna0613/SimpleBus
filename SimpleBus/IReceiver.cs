@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace SimpleBus
 {
-    public interface INotifier : IDisposable
+    public interface IReceiver : IDisposable
     {
-        void Notify(string target, Action<MessageInfo> callbackFunc = null, string body = null);
+        void Start(Action<MessageInfo> callback);
     }
 }
