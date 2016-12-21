@@ -49,7 +49,7 @@ namespace SimpleBus
                 {
                     From = from,
                     To = parsed["to"],
-                    RecivedAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddhhmmssfff", null),
+                    RecivedAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddHHmmssfff", null),
                     Message = msg
                 });
             }

@@ -23,7 +23,7 @@ namespace SimpleBus
 
         public string Generate(string to, DateTime? timestamp = default(DateTime?))
         {
-            return string.Join(".", new[] { _from, to, (timestamp ?? DateTime.Now).ToString("yyyyMMddhhmmssfff"), "sbm" });
+            return string.Join(".", new[] { _from, to, (timestamp ?? DateTime.Now).ToString("yyyyMMddHHmmssfff"), "sbm" });
         }
 
         public string GenerateReceiveTopicPattern()
