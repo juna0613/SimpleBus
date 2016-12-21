@@ -13,7 +13,8 @@ namespace SimpleBus
         private readonly ITopicGenerator _topicGen;
         private readonly FileSystemWatcher _watcher;
         private Action<MessageInfo> _callback;
-        public Receiver(string receiverId, string baseDir, ITopicGenerator topicGen = null)
+        private readonly bool _ack;
+        public Receiver(string receiverId, string baseDir, bool makeAcknolege = true, ITopicGenerator topicGen = null)
         {
             _topicGen = topicGen ?? new FromTopicGenerator(receiverId);
             _recId = receiverId;
@@ -22,6 +23,7 @@ namespace SimpleBus
             _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.CreationTime;
             _watcher.Changed += _watcher_Changed;
             _watcher.Created += _watcher_Created;
+            _ack = makeAcknolege;
         }
         private void Callback(FileSystemEventArgs e)
         {
@@ -35,9 +37,21 @@ namespace SimpleBus
             {
                 From = from,
                 To = parsed["to"],
-                RecivedAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddhhmmssfff", null),
+                RecivedAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddHHmmssfff", null),
                 Message = msg
             });
+            if(_ack)
+            {
+                var topic = _topicGen.Generate(from);
+                if (!Directory.Exists(_baseDir))
+                {
+                    Directory.CreateDirectory(_baseDir);
+                }
+                using (var file = new StreamWriter(Path.Combine(_baseDir, topic)))
+                {
+                    file.WriteLine("[Acknoledged] {0} {1}", DateTime.Now, _recId);
+                }
+            }
         }
         private void _watcher_Created(object sender, FileSystemEventArgs e)
         {
