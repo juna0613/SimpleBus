@@ -11,20 +11,19 @@ namespace SimpleBus
     public class Notifier : INotifier
     {
         private readonly string _baseDir, _from;
-        private readonly System.Text.RegularExpressions.Regex _matcher;
         private readonly FileSystemWatcher _watcher;
-        private Dictionary<string, Action<AckInfo>> _callbacks = new Dictionary<string, Action<AckInfo>>();
+        private Dictionary<string, Action<MessageInfo>> _callbacks = new Dictionary<string, Action<MessageInfo>>();
         private readonly ITopicGenerator _topicGen;
         public Notifier(string from, string baseDir, ITopicGenerator topicGenerator = null)
         {
             _baseDir = baseDir;
             _from = from;
-            _watcher = new FileSystemWatcher(baseDir, "*.sbm");
+            _topicGen = topicGenerator ?? new FromTopicGenerator(from);
+            _watcher = new FileSystemWatcher(baseDir, _topicGen.GenerateReceiveTopicPattern());
             _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.CreationTime;
             _watcher.Created += _watcher_Created;
             _watcher.Changed += _watcher_Changed;
-            _topicGen = topicGenerator ?? new FromTopicGenerator(from);
-            _matcher = new System.Text.RegularExpressions.Regex(_topicGen.GenerateAckTopicPattern().Replace("*", @".*"), System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            _watcher.EnableRaisingEvents = true;
         }
 
         // search ack is back
@@ -41,21 +40,18 @@ namespace SimpleBus
         private void Callback(FileSystemEventArgs e)
         {
             var filename = e.Name;
-            if (_matcher.IsMatch(filename))
+            var parsed = _topicGen.Parse(filename);
+            var from = parsed["from"];
+            if (_callbacks.ContainsKey(from))
             {
-                var parsed = _topicGen.Parse(filename);
-                var from = parsed["from"];
-                if (_callbacks.ContainsKey(from))
+                var msg = File.ReadAllText(e.FullPath);
+                _callbacks[from](new MessageInfo
                 {
-                    var msg = File.ReadAllText(e.FullPath);
-                    _callbacks[from](new AckInfo
-                    {
-                        From = from,
-                        To = parsed["to"],
-                        AckAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddhhmmssfff", null),
-                        Message = msg
-                    });
-                }
+                    From = from,
+                    To = parsed["to"],
+                    RecivedAt = DateTime.ParseExact(parsed["timestamp"], "yyyyMMddhhmmssfff", null),
+                    Message = msg
+                });
             }
         }
 
@@ -65,10 +61,10 @@ namespace SimpleBus
             _watcher.Dispose();
         }
 
-        public void Notify(string target, Action<AckInfo> callback = null, string body = null)
+        public void Notify(string target, Action<MessageInfo> callback = null, string body = null)
         {
             var topic = _topicGen.Generate(target);
-            var ackPattern = _topicGen.GenerateAckTopicPattern();
+            var ackPattern = _topicGen.GenerateReceiveTopicPattern();
 
             if (callback != null) _callbacks[target] = callback;
 
